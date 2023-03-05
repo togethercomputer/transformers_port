@@ -26,6 +26,7 @@ FUSE_LN = False
 FUSE_MLP = False
 FLASH_ATTN = False
 FLASH_CROSS_ATTN = False
+FAST_ROTARY = False
 
 if FLASH_ATTN:
     from flash_attn.flash_attention import FlashAttention
@@ -35,7 +36,9 @@ if FUSE_MLP:
     from flash_attn.ops.fused_dense import fused_dense_gelu_dense_func
 if FUSE_LN:
     from flash_attn.ops.layer_norm import dropout_add_layer_norm
-from einops import rearrange
+if FAST_ROTARY:
+    from flash_attn.layers.rotary import apply_rotary_emb_func
+from einops import rearrange, repeat
 
 from ...activations import ACT2FN
 from ...file_utils import (
@@ -144,22 +147,35 @@ class GPTNeoXAttention(nn.Module):
         key = qkv[..., self.head_size : 2 * self.head_size].permute(0, 2, 1, 3)
         value = qkv[..., 2 * self.head_size :].permute(0, 2, 1, 3)
 
-        # Compute rotary embeddings on rotary_ndims
-        query_rot = query[..., : self.rotary_ndims]
-        query_pass = query[..., self.rotary_ndims :]
-        key_rot = key[..., : self.rotary_ndims]
-        key_pass = key[..., self.rotary_ndims :]
+        if not FAST_ROTARY:
 
-        # Compute token offset for rotary embeddings (when decoding)
-        seq_len = key.shape[-2]
-        offset = 0
-        if has_layer_past:
-            offset = layer_past[0].shape[-2]
-            seq_len += offset
-        cos, sin = self.rotary_emb(value, seq_len=seq_len)
-        query, key = apply_rotary_pos_emb(query_rot, key_rot, cos, sin, offset=offset)
-        query = torch.cat((query, query_pass), dim=-1)
-        key = torch.cat((key, key_pass), dim=-1)
+            # Compute rotary embeddings on rotary_ndims
+            query_rot = query[..., : self.rotary_ndims]
+            query_pass = query[..., self.rotary_ndims :]
+            key_rot = key[..., : self.rotary_ndims]
+            key_pass = key[..., self.rotary_ndims :]
+            
+            # Compute token offset for rotary embeddings (when decoding)
+            seq_len = key.shape[-2]
+            offset = 0
+            if has_layer_past:
+                offset = layer_past[0].shape[-2]
+                seq_len += offset
+            cos, sin = self.rotary_emb(value, seq_len=seq_len)
+            query, key = apply_rotary_pos_emb(query_rot, key_rot, cos, sin, offset=offset)
+            query = torch.cat((query, query_pass), dim=-1)
+            key = torch.cat((key, key_pass), dim=-1)
+        else:
+            seq_len = key.shape[-2]
+            offset = 0
+            if has_layer_past:
+                offset = layer_past[0].shape[-2]
+                seq_len += offset
+            cos, sin = self.rotary_emb(value, seq_len=seq_len)
+            # query = apply_rotary_emb_torch(query.permute(0, 2, 1, 3), cos[offset:offset + query.shape[-2]], sin[offset:offset + query.shape[-2]]).permute(0, 2, 1, 3)
+            # key = apply_rotary_emb_torch(key.permute(0, 2, 1, 3), cos[offset:offset + query.shape[-2]], sin[offset:offset + query.shape[-2]]).permute(0, 2, 1, 3)
+            query = apply_rotary_emb_func(query.permute(0, 2, 1, 3), cos[offset:offset + query.shape[-2]], sin[offset:offset + query.shape[-2]]).permute(0, 2, 1, 3)
+            key = apply_rotary_emb_func(key.permute(0, 2, 1, 3), cos[offset:offset + query.shape[-2]], sin[offset:offset + query.shape[-2]]).permute(0, 2, 1, 3)
 
         # Cache QKV values
         if has_layer_past:
@@ -242,6 +258,7 @@ class GPTNeoXAttention(nn.Module):
         batch_size, num_attention_heads, query_length, attn_head_size = query.size()
         key_length = key.size(-2)
         if query_length == key_length and FLASH_ATTN:
+            # print('flash_attn')
             # B H S D -> B S 3 H D
             qkv = torch.stack([query, key, value], dim=2) # B H 3 S D
             qkv = torch.swapaxes(qkv, 1, 3) # B S 3 H D
@@ -250,6 +267,7 @@ class GPTNeoXAttention(nn.Module):
 
             return attn_output, _
         elif query_length != key_length and FLASH_CROSS_ATTN:
+            # print('cross')
             q = torch.swapaxes(query, 1, 2) # B S H D
             kv = torch.stack([key, value], dim=2) # B H 3 S D
             kv = torch.swapaxes(kv, 1, 3) # B S 3 H D
@@ -333,6 +351,9 @@ class RotaryEmbedding(torch.nn.Module):
         emb = torch.cat((freqs, freqs), dim=-1)
         self.cos_cached = emb.cos()[None, None, :, :].half()
         self.sin_cached = emb.sin()[None, None, :, :].half()
+        if FAST_ROTARY:
+            self.cos_cached = rearrange(self.cos_cached[0, 0], 's (t d) -> s t d', t=2)[:, 0, :]
+            self.sin_cached = rearrange(self.sin_cached[0, 0], 's (t d) -> s t d', t=2)[:, 0, :]
 
     def forward(self, x, seq_len=None):
         # x: [bs, num_attention_heads, seq_len, head_size]
@@ -345,6 +366,9 @@ class RotaryEmbedding(torch.nn.Module):
             emb = torch.cat((freqs, freqs), dim=-1).to(x.device)
             self.cos_cached = emb.cos()[None, None, :, :].half()
             self.sin_cached = emb.sin()[None, None, :, :].half()
+            if FAST_ROTARY:
+                self.cos_cached = rearrange(self.cos_cached[0, 0], 's (t d) -> s t d', t=2)[:, 0, :]
+                self.sin_cached = rearrange(self.sin_cached[0, 0], 's (t d) -> s t d', t=2)[:, 0, :]
         # return self.cos_cached[:seq_len, ...].to(x.device), self.sin_cached[:seq_len, ...].to(x.device)
         return self.cos_cached[:seq_len, ...], self.sin_cached[:seq_len, ...]
 
@@ -354,17 +378,18 @@ def rotate_half(x):
     return torch.cat((-x2, x1), dim=-1)
 
 
-# def apply_rotary_emb_torch(x, cos, sin):
-#     """
-#     x: (batch_size, seqlen, nheads, headdim)
-#     cos, sin: (seqlen, rotary_dim / 2)
-#     """
-#     rotary_dim = cos.shape[-1] * 2
-#     assert rotary_dim <= x.shape[-1]
-#     cos = repeat(cos, 's d -> s 1 (2 d)')
-#     sin = repeat(sin, 's d -> s 1 (2 d)')
-#     return torch.cat([x[..., :rotary_dim] * cos + rotate_half(x[..., :rotary_dim]) * sin,
-#                       x[..., rotary_dim:]], dim=-1)
+def apply_rotary_emb_torch(x, cos, sin):
+    """
+    x: (batch_size, seqlen, nheads, headdim)
+    cos, sin: (seqlen, rotary_dim / 2)
+    """
+    rotary_dim = cos.shape[-1] * 2
+    assert rotary_dim <= x.shape[-1]
+    cos = repeat(cos, 's d -> s 1 (2 d)')
+    sin = repeat(sin, 's d -> s 1 (2 d)')
+    # breakpoint()
+    return torch.cat([x[..., :rotary_dim] * cos + rotate_half(x[..., :rotary_dim]) * sin,
+                      x[..., rotary_dim:]], dim=-1)
 
 # def rotate_half(x):
 #     """Rotates half the hidden dims of the input."""
