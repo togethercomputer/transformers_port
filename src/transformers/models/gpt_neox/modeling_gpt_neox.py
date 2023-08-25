@@ -114,14 +114,9 @@ class GPTNeoXAttention(nn.Module):
         self._init_bias(config.max_position_embeddings)
 
         self.register_buffer("masked_bias", torch.tensor(-1e9), persistent=False)
-        self.rotary_emb = GPTNeoXRotaryEmbedding(
-            self.rotary_ndims, config.max_position_embeddings, base=config.rotary_emb_base, device = 'cuda:0'
-        )
-        self.register_buffer(
-            "norm_factor",
-            torch.sqrt(torch.tensor(self.head_size, dtype=torch.float32)).to(torch.get_default_dtype()),
-            persistent=False,
-        )
+        self._init_rope()
+
+        self.norm_factor = self.head_size**-0.5
         self.query_key_value = nn.Linear(config.hidden_size, 3 * config.hidden_size)
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         if FLASH_ATTN:
@@ -313,8 +308,28 @@ class GPTNeoXAttention(nn.Module):
             # k = rearrange(key, 'b h s d -> (b s) h d')
             # v = rearrange(value, 'b h s d -> (b s) h d')
 
+<<<<<<< HEAD
             # # cu_seqlens_q = torch.arange(0, (batch_size + 1) * q_seqlen, step=q_seqlen, dtype=torch.int32, device=q.device)
             # # cu_seqlens_kv = torch.arange(0, (batch_size + 1) * kv_seqlen, step=kv_seqlen, dtype=torch.int32, device=q.device)
+=======
+        query = query.view(batch_size * num_attention_heads, query_length, attn_head_size)
+        key = key.view(batch_size * num_attention_heads, key_length, attn_head_size)
+        attn_scores = torch.zeros(
+            batch_size * num_attention_heads,
+            query_length,
+            key_length,
+            dtype=query.dtype,
+            device=key.device,
+        )
+        attn_scores = torch.baddbmm(
+            attn_scores,
+            query,
+            key.transpose(1, 2),
+            beta=1.0,
+            alpha=self.norm_factor,
+        )
+        attn_scores = attn_scores.view(batch_size, num_attention_heads, query_length, key_length)
+>>>>>>> upstream/add-llama-code
 
             # attn_output = flash_attn_unpadded_func(q, k, v, cu_seqlens_q, cu_seqlens_k, q_seqlen, kv_seqlen, 0.0, softmax_scale=1.0, causal=True)
 
@@ -661,6 +676,7 @@ class GPTNeoXModel(GPTNeoXPreTrainedModel):
         if input_ids is not None and inputs_embeds is not None:
             raise ValueError("You cannot specify both input_ids and inputs_embeds at the same time")
         elif input_ids is not None:
+            self.warn_if_padding_and_no_attention_mask(input_ids, attention_mask)
             input_shape = input_ids.size()
         elif inputs_embeds is not None:
             input_shape = inputs_embeds.size()[:-1]
@@ -1020,7 +1036,9 @@ class GPTNeoXForSequenceClassification(GPTNeoXPreTrainedModel):
             sequence_lengths = -1
         else:
             if input_ids is not None:
-                sequence_lengths = (torch.ne(input_ids, self.config.pad_token_id).sum(-1) - 1).to(logits.device)
+                sequence_lengths = (torch.eq(input_ids, self.config.pad_token_id).long().argmax(-1) - 1).to(
+                    logits.device
+                )
             else:
                 sequence_lengths = -1
                 logger.warning(
