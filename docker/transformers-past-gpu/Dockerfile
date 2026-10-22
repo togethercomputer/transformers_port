@@ -8,6 +8,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
       *) echo "unsupported base $ID $VERSION_ID"; exit 1 ;; \
     esac && \
     dpkg --compare-versions "$v" ge "$min" || { echo "ca-certificates $v is below the fixed version"; exit 1; }
+# Pillow 13.0.0 (CVE-2026-96639 and others) requires Python >= 3.11: create a venv from a >= 3.11 interpreter
+# (deadsnakes' 3.11 on Ubuntu, whose 22.04 ships 3.10; the distro python3 on Debian 12+) and put it first on PATH
+RUN . /etc/os-release && apt-get update && \
+    if [ "$ID" = ubuntu ]; then \
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends software-properties-common gpg-agent && \
+      add-apt-repository -y ppa:deadsnakes/ppa && apt-get update && \
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3.11 python3.11-dev python3.11-venv && py=python3.11; \
+    else \
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 python3-dev python3-venv && py=python3; \
+    fi && \
+    rm -rf /var/lib/apt/lists/* && "$py" -m venv /opt/venv && \
+    /opt/venv/bin/python -c 'import sys; assert sys.version_info >= (3, 11), sys.version' && \
+    echo 'export PATH=/opt/venv/bin:$PATH' > /etc/profile.d/00-venv.sh
+# The profile.d entry keeps the venv first for the login shell below (Debian's /etc/profile resets PATH)
+ENV PATH=/opt/venv/bin:$PATH
 LABEL maintainer="Hugging Face"
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -16,7 +31,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 SHELL ["sh", "-lc"]
 
 RUN apt update
-RUN apt install -y ca-certificates git libsndfile1-dev tesseract-ocr espeak-ng python3 python3-pip ffmpeg git-lfs libaio-dev
+RUN apt install -y ca-certificates git libsndfile1-dev tesseract-ocr espeak-ng ffmpeg git-lfs libaio-dev
 RUN git lfs install
 RUN python3 -m pip install --no-cache-dir --upgrade pip
 

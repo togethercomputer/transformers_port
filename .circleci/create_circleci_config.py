@@ -33,7 +33,7 @@ COMMON_ENV_VARIABLES = {
     "RUN_PT_FLAX_CROSS_TESTS": False,
 }
 COMMON_PYTEST_OPTIONS = {"max-worker-restart": 0, "dist": "loadfile", "s": None}
-DEFAULT_DOCKER_IMAGE = [{"image": "cimg/python:3.10.13"}]
+DEFAULT_DOCKER_IMAGE = [{"image": "cimg/python:3.11.17"}]
 
 
 class EmptyJob:

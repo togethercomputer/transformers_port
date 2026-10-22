@@ -1,5 +1,6 @@
-# https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel-23-07.html#rel-23-07
-FROM nvcr.io/nvidia/pytorch:23.07-py3
+# https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel-24-11.html#rel-24-11
+FROM nvcr.io/nvidia/pytorch:24.11-py3
+# NGC 24.11 (Ubuntu 24.04) ships Python 3.12; Pillow 13.0.0 (CVE-2026-96639 and others) needs Python >= 3.11.
 # CVE-2026-111943: upgrade the OS CA bundle from the distro security repo and fail if it is still vulnerable
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* && \
     v="$(dpkg-query -W -f='${Version}' ca-certificates)" && \
@@ -8,9 +9,9 @@ LABEL maintainer="Hugging Face"
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-ARG PYTORCH='2.1.0'
+ARG PYTORCH='2.6.0'
 # Example: `cu102`, `cu113`, etc.
-ARG CUDA='cu121'
+ARG CUDA='cu126'
 
 RUN apt -y update
 RUN apt install -y ca-certificates libaio-dev
@@ -27,6 +28,8 @@ RUN python3 -m pip uninstall -y torch torchvision torchaudio
 RUN python3 -m pip install --no-cache-dir -U torch==$PYTORCH torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/$CUDA
 
 RUN python3 -m pip install --no-cache-dir ./transformers[deepspeed-testing]
+# Replace the Pillow bundled with the base image (vulnerable before 13.0.0)
+RUN python3 -m pip install --no-cache-dir -U "pillow>=13.0.0"
 
 RUN python3 -m pip install --no-cache-dir git+https://github.com/huggingface/accelerate@main#egg=accelerate
 
@@ -40,7 +43,7 @@ RUN python3 -m pip uninstall -y torch-tensorrt
 RUN python3 -m pip uninstall -y apex
 RUN git clone https://github.com/NVIDIA/apex
 #  `MAX_JOBS=1` disables parallel building to avoid cpu memory OOM when building image on GitHub Action (standard) runners
-RUN cd apex && git checkout 82ee367f3da74b4cd62a1fb47aa9806f0f47b58b && MAX_JOBS=1 python3 -m pip install --global-option="--cpp_ext" --global-option="--cuda_ext" --no-cache -v --disable-pip-version-check .
+RUN cd apex && git checkout e13011fafb65fe8edc503dbc8638b316bc27e2d0 && MAX_JOBS=1 python3 -m pip install --global-option="--cpp_ext" --global-option="--cuda_ext" --no-cache -v --disable-pip-version-check .
 
 # Pre-build **latest** DeepSpeed, so it would be ready for testing (otherwise, the 1st deepspeed test will timeout)
 RUN python3 -m pip uninstall -y deepspeed

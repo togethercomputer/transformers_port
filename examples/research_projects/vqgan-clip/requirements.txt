@@ -1,5 +1,4 @@
 einops
-gradio
 icecream
 imageio
 lpips
@@ -8,7 +7,7 @@ more_itertools
 numpy
 omegaconf
 opencv_python_headless
-Pillow
+Pillow>=13.0.0
 pudb
 pytorch_lightning
 PyYAML
