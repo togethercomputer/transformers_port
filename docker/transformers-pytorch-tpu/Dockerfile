@@ -1,4 +1,8 @@
 FROM google/cloud-sdk:slim
+# CVE-2026-111943: upgrade the OS CA bundle from the distro security repo and fail if it is still vulnerable
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* && \
+    v="$(dpkg-query -W -f='${Version}' ca-certificates)" && \
+    dpkg --compare-versions "$v" ge 20250419+deb13u1 || { echo "ca-certificates $v is below 20250419+deb13u1"; exit 1; }
 
 # Build args.
 ARG GITHUB_REF=refs/heads/main

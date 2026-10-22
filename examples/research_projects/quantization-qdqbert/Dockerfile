@@ -12,7 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM nvcr.io/nvidia/pytorch:23.04-py3
+FROM nvcr.io/nvidia/pytorch:23.07-py3
+# CVE-2026-111943: upgrade the OS CA bundle from the distro security repo and fail if it is still vulnerable
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* && \
+    v="$(dpkg-query -W -f='${Version}' ca-certificates)" && \
+    dpkg --compare-versions "$v" ge 20260816 || { echo "ca-certificates $v is below 20260816"; exit 1; }
 LABEL maintainer="Hugging Face"
 LABEL repository="transformers"
 

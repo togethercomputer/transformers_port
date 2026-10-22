@@ -1,5 +1,13 @@
 ARG BASE_DOCKER_IMAGE
 FROM $BASE_DOCKER_IMAGE
+# CVE-2026-111943: upgrade the OS CA bundle from the distro security repo and fail if it is still vulnerable
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* && \
+    . /etc/os-release && v="$(dpkg-query -W -f='${Version}' ca-certificates)" && \
+    case "$ID:$VERSION_ID" in \
+      ubuntu:*) min=20260816 ;; debian:12*) min=20250419~deb12u2 ;; debian:13*) min=20250419+deb13u1 ;; \
+      *) echo "unsupported base $ID $VERSION_ID"; exit 1 ;; \
+    esac && \
+    dpkg --compare-versions "$v" ge "$min" || { echo "ca-certificates $v is below the fixed version"; exit 1; }
 LABEL maintainer="Hugging Face"
 
 ARG DEBIAN_FRONTEND=noninteractive
