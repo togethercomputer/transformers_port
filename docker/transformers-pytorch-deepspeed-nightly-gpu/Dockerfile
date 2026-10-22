@@ -1,14 +1,19 @@
-# https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel-22-12.html#rel-22-12
-FROM nvcr.io/nvidia/pytorch:22.12-py3
+# https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel-24-11.html#rel-24-11
+FROM nvcr.io/nvidia/pytorch:24.11-py3
+# NGC 24.11 (Ubuntu 24.04) ships Python 3.12; Pillow 13.0.0 (CVE-2026-96639 and others) needs Python >= 3.11.
+# CVE-2026-111943: upgrade the OS CA bundle from the distro security repo and fail if it is still vulnerable
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/* && \
+    v="$(dpkg-query -W -f='${Version}' ca-certificates)" && \
+    dpkg --compare-versions "$v" ge 20260816 || { echo "ca-certificates $v is below 20260816"; exit 1; }
 LABEL maintainer="Hugging Face"
 
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Example: `cu102`, `cu113`, etc.
-ARG CUDA='cu118'
+ARG CUDA='cu126'
 
 RUN apt -y update
-RUN apt install -y libaio-dev
+RUN apt install -y ca-certificates libaio-dev
 RUN python3 -m pip install --no-cache-dir --upgrade pip
 
 ARG REF=main
@@ -22,6 +27,8 @@ RUN python3 -m pip uninstall -y torch torchvision torchaudio
 RUN python3 -m pip install --no-cache-dir -U --pre torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/nightly/$CUDA
 
 RUN python3 -m pip install --no-cache-dir ./transformers[deepspeed-testing]
+# Replace the Pillow bundled with the base image (vulnerable before 13.0.0)
+RUN python3 -m pip install --no-cache-dir -U "pillow>=13.0.0"
 
 RUN python3 -m pip install --no-cache-dir git+https://github.com/huggingface/accelerate@main#egg=accelerate
 

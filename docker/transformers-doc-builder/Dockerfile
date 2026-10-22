@@ -1,17 +1,17 @@
-FROM python:3.8
+FROM python:3.11-bookworm
 LABEL maintainer="Hugging Face"
 
 RUN apt update
 RUN git clone https://github.com/huggingface/transformers
 
 RUN python3 -m pip install --no-cache-dir --upgrade pip && python3 -m pip install --no-cache-dir git+https://github.com/huggingface/doc-builder ./transformers[dev]
-RUN apt-get -y update && apt-get install -y libsndfile1-dev && apt install -y tesseract-ocr
+RUN apt-get -y update && apt-get install -y libsndfile1-dev && apt install -y tesseract-ocr && apt-get install -y --no-install-recommends --only-upgrade ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Torch needs to be installed before deepspeed
 RUN python3 -m pip install --no-cache-dir ./transformers[deepspeed]
 
 RUN python3 -m pip install --no-cache-dir torchvision git+https://github.com/facebookresearch/detectron2.git pytesseract
-RUN python3 -m pip install --no-cache-dir pytorch-quantization --extra-index-url https://pypi.ngc.nvidia.com
+RUN python3 -m pip install --no-cache-dir pytorch-quantization==2.1.3 --extra-index-url https://pypi.nvidia.com
 RUN python3 -m pip install -U "itsdangerous<2.1.0"
 
 # Test if the image could successfully build the doc. before publishing the image

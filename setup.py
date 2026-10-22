@@ -97,7 +97,7 @@ if stale_egg_info.exists():
 # 1. all dependencies should be listed here with their version requirements if any
 # 2. once modified, run: `make deps_table_update` to update src/transformers/dependency_versions_table.py
 _deps = [
-    "Pillow<10.0.0",
+    "Pillow>=13.0.0,<14",
     "accelerate>=0.20.3",
     "av==9.2.0",  # Latest version of PyAV (10.0.0) has issues with audio stream.
     "beautifulsoup4",
@@ -456,6 +456,7 @@ setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
     cmdclass={"deps_table_update": DepsTableUpdateCommand},

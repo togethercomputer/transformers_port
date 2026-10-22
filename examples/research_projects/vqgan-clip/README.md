@@ -22,7 +22,7 @@ To install locally:
 In the root of the repo run:
 
 ```
-conda create -n vqganclip python=3.8
+conda create -n vqganclip python=3.11
 conda activate vqganclip
 git-lfs install
 git clone https://huggingface.co/datasets/erwann/face_editor_model_ckpt model_checkpoints
