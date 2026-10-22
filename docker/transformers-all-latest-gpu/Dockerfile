@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu22.04
 LABEL maintainer="Hugging Face"
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -16,7 +16,7 @@ ARG INTEL_TORCH_EXT='1.11.0'
 ARG CUDA='cu118'
 
 RUN apt update
-RUN apt install -y git libsndfile1-dev tesseract-ocr espeak-ng python3 python3-pip ffmpeg git-lfs
+RUN apt install -y ca-certificates git libsndfile1-dev tesseract-ocr espeak-ng python3 python3-pip ffmpeg git-lfs
 RUN git lfs install
 RUN python3 -m pip install --no-cache-dir --upgrade pip
 

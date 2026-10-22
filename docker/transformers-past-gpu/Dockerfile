@@ -8,7 +8,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 SHELL ["sh", "-lc"]
 
 RUN apt update
-RUN apt install -y git libsndfile1-dev tesseract-ocr espeak-ng python3 python3-pip ffmpeg git-lfs libaio-dev
+RUN apt install -y ca-certificates git libsndfile1-dev tesseract-ocr espeak-ng python3 python3-pip ffmpeg git-lfs libaio-dev
 RUN git lfs install
 RUN python3 -m pip install --no-cache-dir --upgrade pip
 

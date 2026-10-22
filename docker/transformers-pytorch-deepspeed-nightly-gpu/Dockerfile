@@ -1,14 +1,14 @@
-# https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel-22-12.html#rel-22-12
-FROM nvcr.io/nvidia/pytorch:22.12-py3
+# https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/rel-23-04.html#rel-23-04
+FROM nvcr.io/nvidia/pytorch:23.04-py3
 LABEL maintainer="Hugging Face"
 
 ARG DEBIAN_FRONTEND=noninteractive
 
 # Example: `cu102`, `cu113`, etc.
-ARG CUDA='cu118'
+ARG CUDA='cu121'
 
 RUN apt -y update
-RUN apt install -y libaio-dev
+RUN apt install -y ca-certificates libaio-dev
 RUN python3 -m pip install --no-cache-dir --upgrade pip
 
 ARG REF=main
