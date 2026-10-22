@@ -33,7 +33,7 @@ COMMON_ENV_VARIABLES = {
     "RUN_PT_FLAX_CROSS_TESTS": False,
 }
 COMMON_PYTEST_OPTIONS = {"max-worker-restart": 0, "dist": "loadfile", "s": None}
-DEFAULT_DOCKER_IMAGE = [{"image": "cimg/python:3.8.12"}]
+DEFAULT_DOCKER_IMAGE = [{"image": "cimg/python:3.10.13"}]
 
 
 class EmptyJob:
@@ -445,8 +445,6 @@ exotic_models_job = CircleCIJob(
         "sudo apt install tesseract-ocr",
         "pip install -U --upgrade-strategy eager pytesseract",
         "pip install -U --upgrade-strategy eager natten",
-        # TODO (ydshieh): Remove this line once `https://github.com/facebookresearch/detectron2/issues/5010` is resolved
-        'pip install -U --upgrade-strategy eager "Pillow<10.0.0"',
     ],
     tests_to_run=[
         "tests/models/*layoutlmv*",
